@@ -208,8 +208,20 @@ app.post("/whish/status", async (req, res) => {
       headers: whishHeaders(),
       body: JSON.stringify({ currency: currency.toUpperCase(), externalId: Number(orderId) })
     });
-    const data = await r.json();
-    res.status(r.ok ? 200 : 400).json(data);
+    const text = await r.text();
+console.log("🔹 Whish raw response (first 400 chars):", text.slice(0, 400));
+
+let data;
+try {
+  data = JSON.parse(text);
+} catch (err) {
+  console.error("❌ Non-JSON response from Whish, showing first part of HTML:");
+  console.error(text.slice(0, 400));
+  return res.status(500).send({ error: "html_response", raw: text.slice(0, 400) });
+}
+
+res.status(r.ok ? 200 : 400).json(data);
+
   } catch (e) {
     console.error(e);
     res.status(500).json({ error: "server_error" });
