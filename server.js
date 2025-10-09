@@ -144,6 +144,13 @@ app.post("/whish/create", async (req, res) => {
         .json({ error: data?.dialog || "Whish error", raw: data });
     }
 
+    let redirectUrl = data.data.collectUrl;
+if (redirectUrl.includes("api.sandbox.whish.money")) {
+  redirectUrl = redirectUrl.replace("api.sandbox.whish.money", "lb.sandbox.whish.money");
+}
+
+res.json({ redirect: redirectUrl });
+
     res.json({ redirect: data.data.collectUrl });
   } catch (e) {
     console.error(e);
