@@ -35,7 +35,7 @@ function whishHeaders() {
 const PUBLIC_BASE_URL = process.env.PUBLIC_BASE_URL; // e.g. https://mrphone-backend.onrender.com
 const SUCCESS_REDIRECT_URL =
   process.env.SUCCESS_REDIRECT_URL ||
-  "https://www.mrphonelb.com/client/contents/pay_error?invoice_id={orderId}";
+  "https://www.mrphonelb.com/client/contents/thankyou?invoice_id={orderId}";
 const FAIL_REDIRECT_URL =
   process.env.FAIL_REDIRECT_URL ||
   "https://www.mrphonelb.com/client/contents/pay_error?invoice_id={orderId}";
