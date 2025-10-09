@@ -172,46 +172,58 @@ app.post("/whish/create", async (req, res) => {
 app.get("/whish/callback", async (req, res) => {
   try {
     const orderId = req.query.orderId;
-    const currency = (req.query.currency || "LBP").toUpperCase();
+    const currency = (req.query.currency || "USD").toUpperCase();
 
     if (!orderId) {
-      return res.redirect(
-        `${FAIL_REDIRECT_URL}?pm=whish&error=missing_order_id`
-      );
+      return res.redirect(`${FAIL_REDIRECT_URL}?error=missing_order`);
     }
 
-    const r = await fetch(`${WHISH_BASE}/payment/collect/status`, {
+    // ✅ Step 1: Check payment status from Whish
+    const statusRes = await fetch(`${WHISH_BASE}/payment/collect/status`, {
       method: "POST",
       headers: whishHeaders(),
       body: JSON.stringify({ currency, externalId: Number(orderId) })
     });
-    const js = await r.json();
-    const status = (js?.data?.collectStatus || "").toLowerCase();
 
+    const js = await statusRes.json();
+    const status = (js?.data?.collectStatus || "").toLowerCase();
+    console.log("💳 Whish callback result:", status);
+
+    // ✅ Step 2: If successful → create draft invoice in Daftra
     if (status === "success") {
+      const daftraRes = await fetch("https://www.mrphonelb.com/api2/invoices", {
+        method: "POST",
+        headers: {
+          APIKEY: "dd904f6a2745e5206ea595caac587a850e990504",
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({
+          status: "draft",
+          currency,
+          notes: `Created automatically after successful Whish Pay transaction (Order ${orderId})`,
+          total: 0, // 🔸 Optional: Replace with actual amount if you pass it later
+        })
+      });
+
+      const daftraData = await daftraRes.json();
+      console.log("🧾 Daftra invoice created:", daftraData);
+
+      const invoiceId = daftraData?.data?.id || daftraData?.id || "unknown";
+
+      // ✅ Step 3: Redirect user to Thank You page with Daftra invoice ID
       return res.redirect(
-        `${SUCCESS_REDIRECT_URL}?invoice_id=${encodeURIComponent(
-          orderId
-        )}&pm=whish`
-      );
-    } else if (status === "failed") {
-      return res.redirect(
-        `${FAIL_REDIRECT_URL}?invoice_id=${encodeURIComponent(
-          orderId
-        )}&pm=whish`
-      );
-    } else {
-      return res.redirect(
-        `${PENDING_REDIRECT_URL}?invoice_id=${encodeURIComponent(
-          orderId
-        )}&pm=whish&pending=1`
+        `${SUCCESS_REDIRECT_URL}?invoice_id=${invoiceId}&pm=whish`
       );
     }
-  } catch (e) {
-    console.error("callback error", e);
+
+    // ❌ Payment failed
     return res.redirect(
-      `${FAIL_REDIRECT_URL}?pm=whish&error=callback_exception`
+      `${FAIL_REDIRECT_URL}?order_id=${orderId}&pm=whish&status=failed`
     );
+
+  } catch (err) {
+    console.error("❌ Callback error:", err);
+    return res.redirect(`${FAIL_REDIRECT_URL}?error=callback_exception`);
   }
 });
 
