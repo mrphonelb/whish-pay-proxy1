@@ -83,80 +83,89 @@ app.get("/whish/balance", async (_req, res) => {
 
 // Create a payment (returns collectUrl)
 app.post("/whish/create", async (req, res) => {
+  let responded = false; // safety flag
+
   try {
-    let { orderId, amount, currency, description } = req.body;
+    const { orderId, amount, currency, description } = req.body;
 
-    if (!orderId || amount == null)
-      return res
-        .status(400)
-        .json({ error: "orderId and amount are required" });
+    if (!orderId || amount == null) {
+      responded = true;
+      return res.status(400).json({ error: "orderId and amount are required" });
+    }
 
-    // Normalize
-    const numericAmount =
-      typeof amount === "string"
-        ? Number(amount.replace(/,/g, ""))
-        : Number(amount);
-    if (!Number.isFinite(numericAmount) || numericAmount <= 0)
+    const numericAmount = Number(String(amount).replace(/,/g, ""));
+    if (!Number.isFinite(numericAmount) || numericAmount <= 0) {
+      responded = true;
       return res.status(400).json({ error: "invalid amount" });
+    }
 
-    // externalId must be numeric as per spec (Long)
     const externalId = Number(orderId);
-    if (!Number.isFinite(externalId))
+    if (!Number.isFinite(externalId)) {
+      responded = true;
       return res.status(400).json({ error: "orderId must be numeric" });
+    }
 
-    if (!PUBLIC_BASE_URL)
-      return res.status(500).json({ error: "missing PUBLIC_BASE_URL env var" });
-
-    // Default currency fallback
     const cur = (currency || "LBP").toUpperCase();
 
     const payload = {
       amount: numericAmount,
-      currency: cur, // LBP / USD / AED
+      currency: cur,
       invoice: description || `Order #${orderId}`,
-      externalId: externalId,
-      // Whish hits these FIRST (GET), we will double-check status then redirect:
-      successCallbackUrl: `${PUBLIC_BASE_URL}/whish/callback?result=success&orderId=${encodeURIComponent(
-        orderId
-      )}&currency=${cur}`,
-      failureCallbackUrl: `${PUBLIC_BASE_URL}/whish/callback?result=failure&orderId=${encodeURIComponent(
-        orderId
-      )}&currency=${cur}`,
-      // After user finishes on Whish UI, they get redirected here:
-      successRedirectUrl: `${SUCCESS_REDIRECT_URL}?invoice_id=${encodeURIComponent(
-        orderId
-      )}&pm=whish`,
-      failureRedirectUrl: `${FAIL_REDIRECT_URL}?invoice_id=${encodeURIComponent(
-        orderId
-      )}&pm=whish`
+      externalId,
+      successCallbackUrl: `${PUBLIC_BASE_URL}/whish/callback?result=success&orderId=${externalId}&currency=${cur}`,
+      failureCallbackUrl: `${PUBLIC_BASE_URL}/whish/callback?result=failure&orderId=${externalId}&currency=${cur}`,
+      successRedirectUrl: `${SUCCESS_REDIRECT_URL}?invoice_id=${externalId}&pm=whish`,
+      failureRedirectUrl: `${FAIL_REDIRECT_URL}?invoice_id=${externalId}&pm=whish`
     };
+
+    console.log("🔹 Sending to Whish:", payload);
 
     const r = await fetch(`${WHISH_BASE}/payment/whish`, {
       method: "POST",
       headers: whishHeaders(),
       body: JSON.stringify(payload)
     });
-    const data = await r.json();
 
-    if (!r.ok || !data.status || !data?.data?.collectUrl) {
-      return res
-        .status(400)
-        .json({ error: data?.dialog || "Whish error", raw: data });
+    const text = await r.text();
+    console.log("🔹 Whish raw response:", text.slice(0, 400));
+
+    let data;
+    try {
+      data = JSON.parse(text);
+    } catch {
+      if (!responded) {
+        responded = true;
+        return res.status(500).json({ error: "Invalid JSON from Whish", raw: text.slice(0, 300) });
+      }
     }
 
+    if (!r.ok || !data?.status || !data?.data?.collectUrl) {
+      if (!responded) {
+        responded = true;
+        return res.status(400).json({ error: "Whish error", raw: data });
+      }
+    }
+
+    // ✅ Fix sandbox redirect host if needed
     let redirectUrl = data.data.collectUrl;
-if (redirectUrl.includes("api.sandbox.whish.money")) {
-  redirectUrl = redirectUrl.replace("api.sandbox.whish.money", "lb.sandbox.whish.money");
-}
+    if (redirectUrl.includes("api.sandbox.whish.money")) {
+      redirectUrl = redirectUrl.replace("api.sandbox.whish.money", "lb.sandbox.whish.money");
+    }
 
-res.json({ redirect: redirectUrl });
-
-    res.json({ redirect: data.data.collectUrl });
-  } catch (e) {
-    console.error(e);
-    res.status(500).json({ error: "server_error" });
+    if (!responded) {
+      responded = true;
+      return res.json({ redirect: redirectUrl });
+    }
+  } catch (err) {
+    console.error("❌ /whish/create exception:", err);
+    if (!responded) {
+      responded = true;
+      res.status(500).json({ error: "server_error", details: String(err) });
+    }
   }
 });
+
+
 
 // Callback (Whish calls this via GET). We double-check status then redirect user.
 app.get("/whish/callback", async (req, res) => {
