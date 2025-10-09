@@ -105,7 +105,8 @@ app.post("/whish/create", async (req, res) => {
       return res.status(400).json({ error: "orderId must be numeric" });
     }
 
-    const cur = (currency || "LBP").toUpperCase();
+    let cur = (currency || "LBP").toUpperCase();
+
 
     const payload = {
       amount: numericAmount,
