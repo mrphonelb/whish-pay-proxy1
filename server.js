@@ -38,7 +38,7 @@ const SUCCESS_REDIRECT_URL =
   "https://www.mrphonelb.com/client/contents/thankyou?invoice_id={orderId}";
 const FAIL_REDIRECT_URL =
   process.env.FAIL_REDIRECT_URL ||
-  "https://www.mrphonelb.com/client/contents/pay_error?invoice_id={orderId}";
+  "https://www.mrphonelb.com/client/contents/error?invoice_id={orderId}";
 const PENDING_REDIRECT_URL =
   process.env.PENDING_REDIRECT_URL ||
   "https://www.mrphonelb.com/client/contents/order_summary";
