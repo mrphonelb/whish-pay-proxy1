@@ -110,83 +110,70 @@ failureRedirectUrl: encodeURI(`${FAIL_REDIRECT_URL}?invoice_id=${orderId}&pm=whi
   }
 });
 
-// ============================================================
-// 🧾 CALLBACK AFTER SUCCESS
-// ============================================================
-app.get("/whish/callback", async (req, res) => {
-  try {
-    const { invoice_id, result, amount, client_id } = req.query;
-const clientId = Number(client_id) || 20007;
+// ====================================================
+// ✅ Create Daftra DRAFT Invoice with same number
+// ====================================================
+const today = new Date().toISOString().split("T")[0];
+const draftPayload = {
+  Invoice: {
+    draft: 1, // ✅ force draft
+    no: invoice_id, // ✅ use same ID from checkout draft
+    client_id: clientId,
+    date: today,
+    currency_code: "LBP",
+    notes: `Whish Pay Draft #${invoice_id}`,
+  },
+  InvoiceItem: [
+    {
+      item: `Order #${invoice_id}`,
+      description: "Whish Pay initiated, awaiting confirmation",
+      unit_price: 0,
+      quantity: 1,
+    },
+  ],
+};
 
-
-    console.log(`🔹 Whish callback for invoice ${invoice_id} (${result})`);
-
-    if (result !== "success") {
-      console.error("❌ Whish payment failed");
-      return res.redirect(`${FAIL_REDIRECT_URL}?invoice_id=${invoice_id}`);
-    }
-
-    // ✅ Step 1: Create Daftra Draft Invoice
-    const draftPayload = {
-      Invoice: {
-        draft: 1,
-        client_id: Number(client_id),
-        date: new Date().toISOString().split("T")[0],
-        currency_code: "LBP",
-        notes: `Whish Pay draft invoice #${invoice_id}`,
-      },
-      InvoiceItem: [
-        {
-          item: `Order #${invoice_id}`,
-          description: "Paid via Whish Pay",
-          unit_price: 0,
-          quantity: 1,
-        },
-      ],
-    };
-
-    console.log("🧾 Creating Daftra draft:", JSON.stringify(draftPayload, null, 2));
-
-    const draftRes = await axios.post(`${DAFTRA_API}/invoices`, draftPayload, {
-      headers: {
-        apikey: DAFTRA_API_KEY,
-        "Content-Type": "application/json",
-      },
-    });
-
-    const newInvoiceId = draftRes.data.id;
-    console.log("✅ Draft created in Daftra:", newInvoiceId);
-
-    // ✅ Step 2: Create Pending Payment
-    const paymentAmount = Number((Number(amount) / 1.01).toFixed(2));
-    const paymentPayload = {
-      InvoicePayment: {
-        invoice_id: newInvoiceId,
-        payment_method: "Whish Pay",
-        amount: paymentAmount,
-        status: 2, // Pending
-        notes: `Pending Whish Pay for ${invoice_id}`,
-        currency_code: "LBP",
-      },
-    };
-
-    console.log("💵 Adding pending payment:", JSON.stringify(paymentPayload, null, 2));
-
-    await axios.post(`${DAFTRA_API}/invoice_payments`, paymentPayload, {
-      headers: {
-        apikey: DAFTRA_API_KEY,
-        "Content-Type": "application/json",
-      },
-    });
-
-    console.log("✅ Pending payment added successfully");
-
-    return res.redirect(`${SUCCESS_REDIRECT_URL}?invoice_id=${invoice_id}`);
-  } catch (err) {
-    console.error("❌ Callback error:", err.response?.data || err.message);
-    return res.redirect(`${FAIL_REDIRECT_URL}?invoice_id=${req.query.invoice_id}`);
+// 🔹 Create the draft invoice
+const draftResponse = await axios.post(
+  "https://www.mrphonelb.com/api2/invoices",
+  draftPayload,
+  {
+    headers: {
+      apikey: DAFTRA_API_KEY,
+      "Content-Type": "application/json",
+    },
   }
-});
+);
+
+console.log("✅ Daftra Draft Created:", draftResponse.data);
+
+// ====================================================
+// ✅ Add Pending Payment (amount ÷ 1.01)
+// ====================================================
+const paidAmount = Number(amount) / 1.01;
+const paymentPayload = {
+  InvoicePayment: {
+    invoice_id: invoice_id,
+    payment_method: "Whish Pay",
+    amount: paidAmount,
+    status: 2, // pending
+    notes: `Pending Whish Pay for draft #${invoice_id}`,
+  },
+};
+
+const paymentResponse = await axios.post(
+  "https://www.mrphonelb.com/api2/invoice_payments",
+  paymentPayload,
+  {
+    headers: {
+      apikey: DAFTRA_API_KEY,
+      "Content-Type": "application/json",
+    },
+  }
+);
+
+console.log("✅ Pending Payment Created:", paymentResponse.data);
+
 
 // ============================================================
 // 🚀 START
