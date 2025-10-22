@@ -158,7 +158,7 @@ app.get("/whish/callback", async (req, res) => {
     const paymentPayload = {
       InvoicePayment: {
         invoice_id: Number(invoice_id),
-        payment_method: "Whish Pay",
+        payment_method: "Whish_Pay",
         amount: Number(paidAmount),
         transaction_id: txnId,
         treasury_id: 0,
