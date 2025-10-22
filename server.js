@@ -103,16 +103,17 @@ app.post("/whish/create", async (req, res) => {
     const numericAmount = parseFloat(amount);
     const cur = (currency || "LBP").toUpperCase();
 
-    const payload = {
-      amount: numericAmount,
-      currency: cur,
-      invoice: description || `Invoice #${orderId}`,
-      externalId: Number(orderId),
-      successCallbackUrl: `https://whish-pay-proxy-ahs0.onrender.com/whish/callback?result=success&invoice_id=${orderId}`,
-      failureCallbackUrl: `https://whish-pay-proxy-ahs0.onrender.com/whish/callback?result=failure&invoice_id=${orderId}`,
-      successRedirectUrl: `https://www.mrphonelb.com/client/contents/thankyou?invoice_id=${orderId}&pm=whish`,
-      failureRedirectUrl: `https://www.mrphonelb.com/client/contents/error?invoice_id=${orderId}&pm=whish`
-    };
+   const r = await fetch("https://api.sandbox.whish.money/itel-service/api/payment/whish", {
+  method: "POST",
+  headers: {
+    channel: "10196880",
+    secret: "2faa0831c2a84f8d88d9066288b49991",
+    websiteurl: "mrphonelb.com",
+    "Content-Type": "application/json"
+  },
+  body: JSON.stringify(payload)
+});
+
 
     console.log(`💰 Creating Whish payment for Invoice #${orderId} (${numericAmount} ${cur})`);
     console.log("🔹 Sending payload to Whish:", payload);
