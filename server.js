@@ -98,6 +98,9 @@ failureRedirectUrl: encodeURI(`${FAIL_REDIRECT_URL}?invoice_id=${orderId}&pm=whi
       return res.status(400).json({ error: "Whish error", raw: data });
     }
 
+    // ✅ Properly define redirectUrl
+    const redirectUrl = data.data.collectUrl;
+
     /*let redirectUrl = data.data.collectUrl.replace(
       "api.sandbox.whish.money",
       "lb.sandbox.whish.money"
