@@ -1,6 +1,6 @@
-import express from "express";
-import cors from "cors";
-import fetch from "node-fetch";
+const express = require("express");
+const cors = require("cors");
+const fetch = require("node-fetch");
 
 const app = express();
 app.use(express.json());
@@ -145,4 +145,5 @@ app.get("/whish/verify-existing", async (req, res) => {
 });
 
 const PORT = process.env.PORT || 10000;
-app.listen(PORT, () => console.log("🚀 Whish backend running on port", PORT));
+app.listen(PORT, () => console.log(`🚀 Whish backend running on port ${PORT}`));
+
