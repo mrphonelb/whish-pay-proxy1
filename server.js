@@ -18,7 +18,7 @@ app.use(
 );
 
 // ====== Whish sandbox base ======
-const WHISH_BASE = "https://api.sandbox.whish.money/itel-service/api";
+const WHISH_BASE = "https://lb.sandbox.whish.money/itel-service/api";
 
 // ====== Required headers for Whish API ======
 function whishHeaders() {
