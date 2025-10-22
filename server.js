@@ -104,17 +104,19 @@ app.post("/whish/create", async (req, res) => {
     console.log(`💰 Creating Whish payment for Invoice #${invoice_id} (${numericAmount} ${currency})`);
 
     const payload = {
-      amount: numericAmount,
-      currency,
-      invoice: `Invoice #${invoice_id}`,
-      externalId: Number(invoice_id),
-      merchantCode: CHANNEL,
-      websiteUrl: WEBSITE,
-      successCallbackUrl: `${PUBLIC_BASE_URL}/whish/callback?result=success&invoice_id=${invoice_id}`,
-      failureCallbackUrl: `${PUBLIC_BASE_URL}/whish/callback?result=failure&invoice_id=${invoice_id}`,
-      successRedirectUrl: `${SUCCESS_REDIRECT_URL}?invoice_id=${invoice_id}&pm=whish`,
-      failureRedirectUrl: `${FAIL_REDIRECT_URL}?invoice_id=${invoice_id}&pm=whish`,
-    };
+  amount: numericAmount,
+  currency,
+  invoice: `Invoice #${invoice_id}`,
+  externalId: Number(invoice_id),
+  channel: CHANNEL,
+  secret: SECRET,
+  websiteurl: "mrphonelb.com",
+  successCallbackUrl: `${PUBLIC_BASE_URL}/whish/callback?result=success&invoice_id=${invoice_id}`,
+  failureCallbackUrl: `${PUBLIC_BASE_URL}/whish/callback?result=failure&invoice_id=${invoice_id}`,
+  successRedirectUrl: `${SUCCESS_REDIRECT_URL}?invoice_id=${invoice_id}&pm=whish`,
+  failureRedirectUrl: `${FAIL_REDIRECT_URL}?invoice_id=${invoice_id}&pm=whish`
+};
+
 
     console.log("🔹 Sending payload to Whish:", JSON.stringify(payload, null, 2));
 
