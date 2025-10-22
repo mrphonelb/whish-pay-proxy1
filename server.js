@@ -110,69 +110,117 @@ failureRedirectUrl: encodeURI(`${FAIL_REDIRECT_URL}?invoice_id=${orderId}&pm=whi
   }
 });
 
-// ====================================================
-// ✅ Create Daftra DRAFT Invoice with same number
-// ====================================================
-const today = new Date().toISOString().split("T")[0];
-const draftPayload = {
-  Invoice: {
-    draft: 1, // ✅ force draft
-    no: invoice_id, // ✅ use same ID from checkout draft
-    client_id: clientId,
-    date: today,
-    currency_code: "LBP",
-    notes: `Whish Pay Draft #${invoice_id}`,
-  },
-  InvoiceItem: [
-    {
-      item: `Order #${invoice_id}`,
-      description: "Whish Pay initiated, awaiting confirmation",
-      unit_price: 0,
-      quantity: 1,
-    },
-  ],
-};
+// ============================================================
+// 🧾 CALLBACK (after payment page finishes)
+// ============================================================
+app.get("/whish/callback", async (req, res) => {
+  try {
+    const { invoice_id, result, amount, client_id } = req.query;
+    const clientId = Number(client_id) || 20007;
+    const cur = "LBP";
 
-// 🔹 Create the draft invoice
-const draftResponse = await axios.post(
-  "https://www.mrphonelb.com/api2/invoices",
-  draftPayload,
-  {
-    headers: {
-      apikey: DAFTRA_API_KEY,
-      "Content-Type": "application/json",
-    },
+    console.log(`🔹 Whish callback for invoice ${invoice_id} (${result})`);
+
+    // Check payment status with Whish
+    const response = await fetch(`${WHISH_BASE}/payment/collect/status`, {
+      method: "POST",
+      headers: {
+        channel: "10196880",
+        secret: "2faa0831c2a84f8d88d9066288b49991",
+        websiteurl: "mrphonelb.com",
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ currency: cur, externalId: Number(invoice_id) }),
+    });
+
+    const data = await response.json();
+    const status = (data?.data?.collectStatus || "").toLowerCase();
+    console.log("📬 Whish payment status:", status);
+
+    // ✅ Handle success
+    if (status === "success") {
+      console.log("🧾 Creating Daftra draft:", invoice_id);
+
+      const today = new Date().toISOString().split("T")[0];
+      const draftPayload = {
+        Invoice: {
+          draft: 1,
+          no: invoice_id, // same number as checkout
+          client_id: clientId,
+          date: today,
+          currency_code: "LBP",
+          notes: `Whish Pay Draft #${invoice_id}`,
+        },
+        InvoiceItem: [
+          {
+            item: `Order #${invoice_id}`,
+            description: "Whish Pay initiated, awaiting confirmation",
+            unit_price: 0,
+            quantity: 1,
+          },
+        ],
+      };
+
+      // ✅ Create the draft invoice (await is fine here)
+      const draftResponse = await axios.post(
+        "https://www.mrphonelb.com/api2/invoices",
+        draftPayload,
+        {
+          headers: {
+            apikey: DAFTRA_API_KEY,
+            "Content-Type": "application/json",
+          },
+        }
+      );
+
+      console.log("✅ Daftra Draft Created:", draftResponse.data);
+
+      // ✅ Add pending payment
+      const paidAmount = Number(amount) / 1.01;
+      const paymentPayload = {
+        InvoicePayment: {
+          invoice_id: invoice_id,
+          payment_method: "Whish Pay",
+          amount: paidAmount,
+          status: 2, // pending
+          notes: `Pending Whish Pay for draft #${invoice_id}`,
+        },
+      };
+
+      const paymentResponse = await axios.post(
+        "https://www.mrphonelb.com/api2/invoice_payments",
+        paymentPayload,
+        {
+          headers: {
+            apikey: DAFTRA_API_KEY,
+            "Content-Type": "application/json",
+          },
+        }
+      );
+
+      console.log("✅ Pending Payment Created:", paymentResponse.data);
+
+      return res.redirect(
+        `${SUCCESS_REDIRECT_URL}?invoice_id=${invoice_id}&pm=whish`
+      );
+    }
+
+    // ❌ Handle failure
+    if (status === "failed") {
+      return res.redirect(
+        `${FAIL_REDIRECT_URL}?invoice_id=${invoice_id}&pm=whish`
+      );
+    }
+
+    // 🕒 Pending or unknown
+    return res.redirect(
+      `${PENDING_REDIRECT_URL}?invoice_id=${invoice_id}&pm=whish&pending=1`
+    );
+  } catch (err) {
+    console.error("❌ Callback error:", err);
+    res.redirect(`${FAIL_REDIRECT_URL}?pm=whish&error=callback_exception`);
   }
-);
-
-console.log("✅ Daftra Draft Created:", draftResponse.data);
-
-// ====================================================
-// ✅ Add Pending Payment (amount ÷ 1.01)
-// ====================================================
-const paidAmount = Number(amount) / 1.01;
-const paymentPayload = {
-  InvoicePayment: {
-    invoice_id: invoice_id,
-    payment_method: "Whish Pay",
-    amount: paidAmount,
-    status: 2, // pending
-    notes: `Pending Whish Pay for draft #${invoice_id}`,
-  },
-};
-
-const paymentResponse = await axios.post(
-  "https://www.mrphonelb.com/api2/invoice_payments",
-  paymentPayload,
-  {
-    headers: {
-      apikey: DAFTRA_API_KEY,
-      "Content-Type": "application/json",
-    },
-  }
-);
-
-console.log("✅ Pending Payment Created:", paymentResponse.data);
+});
 
 
 // ============================================================
