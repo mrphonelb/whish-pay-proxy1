@@ -43,6 +43,7 @@ const DAFTRA_API = "https://www.mrphonelb.com/api2";
 app.post("/whish/create", async (req, res) => {
   try {
     const { orderId, amount, currency, description, client_id } = req.body;
+const clientId = Number(client_id) || 20007; // fallback
 
     if (!orderId || !amount)
       return res.status(400).json({ error: "Missing orderId or amount" });
@@ -114,7 +115,9 @@ failureRedirectUrl: encodeURI(`${FAIL_REDIRECT_URL}?invoice_id=${orderId}&pm=whi
 // ============================================================
 app.get("/whish/callback", async (req, res) => {
   try {
-    const { invoice_id, amount, client_id, result } = req.query;
+    const { invoice_id, result, amount, client_id } = req.query;
+const clientId = Number(client_id) || 20007;
+
 
     console.log(`🔹 Whish callback for invoice ${invoice_id} (${result})`);
 
