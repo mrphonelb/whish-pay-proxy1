@@ -25,7 +25,7 @@ app.use((req, res, next) => {
 /* ============================================================
    🧩 BASE CONFIG
    ============================================================ */
-const WHISH_BASE = "https://lb.sandbox.whish.money/itel-service/api"; // ✅ correct sandbox URL
+const WHISH_BASE = "https://api.sandbox.whish.money/itel-service/api"; // ✅ correct sandbox base
 const CHANNEL = "10196880";
 const SECRET = "2faa0831c2a84f8d88d9066288b49991";
 const WEBSITE_URL = "mrphonelb.com";
