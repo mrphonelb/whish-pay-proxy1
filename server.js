@@ -35,15 +35,16 @@ app.post("/whish/create", async (req, res) => {
     console.log(`💰 Creating Whish payment for Invoice #${orderId} (${amount} ${currency})`);
 
     const payload = {
-      amount,
-      currency,
-      invoice: description || `Invoice #${orderId}`,
-      externalId: orderId,
-      successCallbackUrl: `https://whish-pay-proxy-ahs0.onrender.com/whish/callback?result=success&invoice_id=${orderId}&amount=${amount}&client_id=${client_id}`,
-      failureCallbackUrl: `https://whish-pay-proxy-ahs0.onrender.com/whish/callback?result=failure&invoice_id=${orderId}`,
-      successRedirectUrl: `https://www.mrphonelb.com/client/contents/thankyou?invoice_id=${orderId}&pm=whish`,
-      failureRedirectUrl: `https://www.mrphonelb.com/client/contents/error?invoice_id=${orderId}&pm=whish`,
-    };
+  amount: numericAmount,
+  currency: cur,
+  invoice: `Invoice #${invoiceId}`,
+  externalId: uniqueExternalId,
+  successCallbackUrl: `https://whish-pay-proxy-ahs0.onrender.com/whish/callback?result=success&invoice_id=${invoiceId}&amount=${numericAmount}&client_id=${clientId}`,
+  failureCallbackUrl: `https://whish-pay-proxy-ahs0.onrender.com/whish/callback?result=failure&invoice_id=${invoiceId}`,
+  successRedirectUrl: `https://www.mrphonelb.com/client/contents/thankyou?invoice_id=${invoiceId}&pm=whish`,
+  failureRedirectUrl: `https://www.mrphonelb.com/client/contents/error?invoice_id=${invoiceId}&pm=whish`
+};
+
 
     console.log("🔹 Sending payload to Whish:", JSON.stringify(payload, null, 2));
 
