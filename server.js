@@ -90,7 +90,7 @@ app.post("/whish/create", async (req, res) => {
     if (!Number.isFinite(numericAmount))
       return res.status(400).json({ error: "Invalid amount" });
 
-    const cur = (currency || "USD").toUpperCase();
+    const cur = (currency || "LBP").toUpperCase();
 
     console.log(
       `💰 Creating Whish payment for Invoice #${orderId} (${numericAmount} ${cur})`
