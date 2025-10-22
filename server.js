@@ -1,11 +1,8 @@
-// =======================================================
-// 🟣 MrPhoneLB Whish Pay Proxy
-// =======================================================
 const express = require("express");
 const cors = require("cors");
-const morgan = require("morgan");
-const dotenv = require("dotenv");
 const fetch = require("node-fetch");
+const dotenv = require("dotenv");
+const morgan = require("morgan");
 const axios = require("axios");
 
 dotenv.config();
@@ -18,207 +15,226 @@ app.use(
     origin: ["https://www.mrphonelb.com", "https://mrphonelb.com"],
     methods: ["GET", "POST"],
     allowedHeaders: ["Content-Type"],
+    credentials: false,
   })
 );
 
-// =======================================================
-// 🔧 CONFIGURATION
-// =======================================================
-const WHISH_BASE = "https://api.sandbox.whish.money/itel-service/api";
-const CHANNEL = "10196880";
-const SECRET = "2faa0831c2a84f8d88d9066288b49991";
-const WEBSITE = "https://www.mrphonelb.com"; // Whitelisted domain
-const PUBLIC_BASE_URL = "https://whish-pay-proxy-ahs0.onrender.com";
+// ============================================================
+// ✅  CONFIGURATION
+// ============================================================
+const WHISH_BASE =
+  process.env.WHISH_BASE || "https://api.sandbox.whish.money/itel-service/api";
+const PUBLIC_BASE_URL =
+  process.env.PUBLIC_BASE_URL || "https://whish-pay-proxy-ahs0.onrender.com";
 
 const SUCCESS_REDIRECT_URL =
+  process.env.SUCCESS_REDIRECT_URL ||
   "https://www.mrphonelb.com/client/contents/thankyou";
 const FAIL_REDIRECT_URL =
+  process.env.FAIL_REDIRECT_URL ||
   "https://www.mrphonelb.com/client/contents/error";
 const PENDING_REDIRECT_URL =
+  process.env.PENDING_REDIRECT_URL ||
   "https://www.mrphonelb.com/client/contents/order_summary";
 
-const DAFTRA_API_KEY =
-  "dd904f6a2745e5206ea595caac587a850e990504";
+// 🔑 Daftra API key for invoice creation (keep private)
+const DAFTRA_API_KEY = "dd904f6a2745e5206ea595caac587a850e990504";
 
-// =======================================================
-// 🧱 HELPERS
-// =======================================================
-function whishHeaders() {
-  return {
-    channel: CHANNEL,
-    secret: SECRET,
-    websiteurl: WEBSITE,
-    "Content-Type": "application/json",
-  };
-}
+// ============================================================
+// ✅  ROUTES
+// ============================================================
 
-// =======================================================
-// 🩺 HEALTH CHECK
-// =======================================================
-app.get("/", (_, res) => res.send("✅ Whish Pay Proxy Running OK"));
+// Health check
+app.get("/", (_, res) => res.send("✅ Whish Pay Proxy is running fine!"));
 app.get("/health", (_, res) =>
   res.json({ ok: true, time: new Date().toISOString() })
 );
 
-// =======================================================
-// 💰 CHECK BALANCE
-// =======================================================
-app.get("/whish/balance", async (_req, res) => {
+// ============================================================
+// 💰 GET BALANCE (Whish sandbox test)
+// ============================================================
+app.get("/whish/balance", async (_, res) => {
   try {
     console.log("🔹 Checking Whish balance...");
-    const r = await fetch(`${WHISH_BASE}/payment/account/balance`, {
+    const response = await fetch(`${WHISH_BASE}/payment/account/balance`, {
       method: "GET",
-      headers: whishHeaders(),
+      headers: {
+        channel: "10196880",
+        secret: "2faa0831c2a84f8d88d9066288b49991",
+        websiteurl: "mrphonelb.com",
+        "Content-Type": "application/json",
+      },
     });
 
-    const text = await r.text();
-    console.log("🔹 Whish raw response (first 300 chars):", text.slice(0, 300));
-
-    let data;
-    try {
-      data = JSON.parse(text);
-    } catch {
-      console.log("❌ HTML or invalid JSON:", text.slice(0, 300));
-      return res.status(500).send({ error: "invalid_json", html: text });
-    }
-
-    res.status(r.ok ? 200 : 400).json(data);
-  } catch (e) {
-    console.error("❌ Balance fetch error:", e);
-    res.status(500).json({ error: e.message });
+    const text = await response.text();
+    console.log("🔹 Whish raw balance response:", text.slice(0, 200));
+    const data = JSON.parse(text);
+    res.status(response.ok ? 200 : 400).json(data);
+  } catch (err) {
+    console.error("❌ Balance error:", err);
+    res.status(500).json({ error: "server_error", details: err.message });
   }
 });
 
-// =======================================================
-// 🧾 CREATE PAYMENT
-// =======================================================
+// ============================================================
+// 💳 CREATE PAYMENT (MAIN ROUTE)
+// ============================================================
 app.post("/whish/create", async (req, res) => {
   try {
     const { orderId, amount, currency, description } = req.body;
 
-    if (!orderId || !amount) {
+    if (!orderId || !amount)
       return res.status(400).json({ error: "Missing orderId or amount" });
-    }
 
-    const numericAmount = parseFloat(amount);
-    const cur = (currency || "LBP").toUpperCase();
+    const numericAmount = Number(amount);
+    if (!Number.isFinite(numericAmount))
+      return res.status(400).json({ error: "Invalid amount" });
 
-   const r = await fetch("https://api.sandbox.whish.money/itel-service/api/payment/whish", {
-  method: "POST",
-  headers: {
-    channel: "10196880",
-    secret: "2faa0831c2a84f8d88d9066288b49991",
-    websiteurl: "mrphonelb.com",
-    "Content-Type": "application/json"
-  },
-  body: JSON.stringify(payload)
-});
+    const cur = (currency || "USD").toUpperCase();
 
+    console.log(
+      `💰 Creating Whish payment for Invoice #${orderId} (${numericAmount} ${cur})`
+    );
 
-    console.log(`💰 Creating Whish payment for Invoice #${orderId} (${numericAmount} ${cur})`);
-    console.log("🔹 Sending payload to Whish:", payload);
+    // ✅ Build payload as required by Whish
+    const payload = {
+      amount: numericAmount,
+      currency: cur,
+      invoice: description || `Invoice #${orderId}`,
+      externalId: Number(orderId),
+      channel: "10196880", // must exist in body
+      secret: "2faa0831c2a84f8d88d9066288b49991", // must exist in body
+      websiteurl: "mrphonelb.com", // must exist in body
+      successCallbackUrl: `${PUBLIC_BASE_URL}/whish/callback?result=success&invoice_id=${orderId}`,
+      failureCallbackUrl: `${PUBLIC_BASE_URL}/whish/callback?result=failure&invoice_id=${orderId}`,
+      successRedirectUrl: `${SUCCESS_REDIRECT_URL}?invoice_id=${orderId}&pm=whish`,
+      failureRedirectUrl: `${FAIL_REDIRECT_URL}?invoice_id=${orderId}&pm=whish`,
+    };
 
-    const r = await fetch("https://api.sandbox.whish.money/itel-service/api/payment/whish", {
+    console.log("🔹 Sending payload to Whish:", JSON.stringify(payload, null, 2));
+
+    const response = await fetch(`${WHISH_BASE}/payment/whish`, {
       method: "POST",
       headers: {
         channel: "10196880",
         secret: "2faa0831c2a84f8d88d9066288b49991",
         websiteurl: "mrphonelb.com",
-        "Content-Type": "application/json"
+        "Content-Type": "application/json",
       },
-      body: JSON.stringify(payload)
+      body: JSON.stringify(payload),
     });
 
-    const text = await r.text();
+    const text = await response.text();
     console.log("🔹 Whish raw response (full):", text.slice(0, 400));
 
     let data;
     try {
       data = JSON.parse(text);
     } catch {
-      return res.status(500).json({ error: "Invalid JSON", raw: text.slice(0, 400) });
+      return res
+        .status(500)
+        .json({ error: "Invalid JSON response", raw: text.slice(0, 400) });
     }
 
-    if (!data?.data?.collectUrl) {
+    if (!data?.status || !data?.data?.collectUrl) {
       console.error("❌ Whish error:", data);
       return res.status(400).json({ error: "Whish error", raw: data });
     }
 
+    // ✅ Fix sandbox link host if needed
     let redirectUrl = data.data.collectUrl;
     if (redirectUrl.includes("api.sandbox.whish.money")) {
-      redirectUrl = redirectUrl.replace("api.sandbox.whish.money", "lb.sandbox.whish.money");
+      redirectUrl = redirectUrl.replace(
+        "api.sandbox.whish.money",
+        "lb.sandbox.whish.money"
+      );
     }
 
     res.json({ redirect: redirectUrl });
   } catch (err) {
-    console.error("❌ Whish create exception:", err);
+    console.error("❌ Create error:", err);
     res.status(500).json({ error: "server_error", details: err.message });
   }
 });
 
-
-// =======================================================
-// 🔁 CALLBACK (after Whish payment)
-// =======================================================
+// ============================================================
+// 🧾 CALLBACK (after payment page finishes)
+// ============================================================
 app.get("/whish/callback", async (req, res) => {
   try {
-    const { invoice_id } = req.query;
-    if (!invoice_id) {
-      return res.redirect(`${FAIL_REDIRECT_URL}?error=missing_invoice`);
-    }
+    const { invoice_id, result } = req.query;
+    const cur = "USD";
 
-    console.log(`🔁 Callback received for Invoice #${invoice_id}`);
+    console.log(`🔄 Callback received for invoice ${invoice_id} | result=${result}`);
 
-    const r = await fetch(`${WHISH_BASE}/payment/collect/status`, {
+    const response = await fetch(`${WHISH_BASE}/payment/collect/status`, {
       method: "POST",
-      headers: whishHeaders(),
-      body: JSON.stringify({ currency: "USD", externalId: Number(invoice_id) }),
+      headers: {
+        channel: "10196880",
+        secret: "2faa0831c2a84f8d88d9066288b49991",
+        websiteurl: "mrphonelb.com",
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        currency: cur,
+        externalId: Number(invoice_id),
+      }),
     });
 
-    const js = await r.json();
-    const status = (js?.data?.collectStatus || "").toLowerCase();
-    console.log(`📦 Whish callback status = ${status}`);
+    const data = await response.json();
+    const status = (data?.data?.collectStatus || "").toLowerCase();
+    const phone = data?.data?.payerPhoneNumber || "";
 
+    console.log("📬 Whish callback status:", status);
+
+    // ✅ Handle success
     if (status === "success") {
-      // Add pending payment to Daftra
+      // Create pending Daftra payment
       await axios.post(
         "https://www.mrphonelb.com/api2/invoice_payments",
         {
           InvoicePayment: {
             invoice_id: Number(invoice_id),
             payment_method: "Whish_Pay",
-            amount: Number(js?.data?.amount || 0),
-            status: "2", // pending
+            amount: Number(data.amount || 0),
+            status: "2", // Pending
             processed: "0",
-            notes: "Whish Pay Pending Verification",
-            currency_code: "USD",
+            response_message: `Whish Pay success (${phone})`,
+            notes: "Whish payment pending confirmation",
           },
         },
-        { headers: { apikey: DAFTRA_API_KEY, "Content-Type": "application/json" } }
+        {
+          headers: {
+            apikey: DAFTRA_API_KEY,
+            "Content-Type": "application/json",
+          },
+        }
       );
 
-      // Keep invoice as draft
-      await axios.put(
-        `https://www.mrphonelb.com/api2/invoices/${invoice_id}`,
-        { Invoice: { draft: true } },
-        { headers: { apikey: DAFTRA_API_KEY, "Content-Type": "application/json" } }
+      return res.redirect(
+        `${SUCCESS_REDIRECT_URL}?invoice_id=${invoice_id}&pm=whish`
       );
-
-      console.log(`✅ Daftra updated for Invoice #${invoice_id}`);
-      return res.redirect(`${SUCCESS_REDIRECT_URL}?invoice_id=${invoice_id}&pm=whish`);
-    } else if (status === "failed") {
-      return res.redirect(`${FAIL_REDIRECT_URL}?invoice_id=${invoice_id}&pm=whish`);
-    } else {
-      return res.redirect(`${PENDING_REDIRECT_URL}?invoice_id=${invoice_id}&pm=whish&pending=1`);
     }
+
+    // ❌ Handle failure
+    if (status === "failed") {
+      return res.redirect(
+        `${FAIL_REDIRECT_URL}?invoice_id=${invoice_id}&pm=whish`
+      );
+    }
+
+    // 🕒 Pending or unknown
+    return res.redirect(
+      `${PENDING_REDIRECT_URL}?invoice_id=${invoice_id}&pm=whish&pending=1`
+    );
   } catch (err) {
     console.error("❌ Callback error:", err);
-    return res.redirect(`${FAIL_REDIRECT_URL}?error=callback_exception`);
+    res.redirect(`${FAIL_REDIRECT_URL}?pm=whish&error=callback_exception`);
   }
 });
 
-// =======================================================
+// ============================================================
 // 🚀 START SERVER
-// =======================================================
+// ============================================================
 const PORT = process.env.PORT || 10000;
-app.listen(PORT, () => console.log(`🚀 Whish Pay Proxy listening on ${PORT}`));
+app.listen(PORT, () => console.log(`🚀 Whish Pay Proxy listening on port ${PORT}`));
