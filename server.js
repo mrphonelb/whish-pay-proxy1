@@ -51,27 +51,37 @@ app.get("/", (req, res) => {
 });
 
 /* ============================================================
-   ✅ TEST ENDPOINT: Balance
+   ✅ TEST ENDPOINT: Balance (with timeout + clear logs)
    ============================================================ */
 app.get("/whish/balance", async (req, res) => {
   try {
     console.log("🔹 Checking Whish balance...");
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 15000); // ⏱ 15s timeout
+
     const response = await fetch(`${WHISH_BASE}/payment/account/balance`, {
       method: "GET",
       headers: whishHeaders(),
+      signal: controller.signal,
+    }).catch(err => {
+      throw new Error("Network error: " + err.message);
     });
 
+    clearTimeout(timeout);
+
     const text = await response.text();
+    console.log("🔹 Raw Whish response:", text.slice(0, 300));
+
     try {
       const data = JSON.parse(text);
-      res.status(200).json(data);
+      return res.status(200).json(data);
     } catch {
-      console.error("❌ Non-JSON balance response:", text);
-      res.status(500).json({ error: "invalid_response", raw: text });
+      console.error("❌ Non-JSON balance response");
+      return res.status(502).json({ error: "invalid_json", raw: text });
     }
   } catch (err) {
-    console.error("❌ Balance error:", err);
-    res.status(500).json({ error: "server_error" });
+    console.error("❌ Balance fetch error:", err);
+    return res.status(500).json({ error: err.message || "server_error" });
   }
 });
 
