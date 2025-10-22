@@ -94,64 +94,67 @@ app.get("/whish/balance", async (_req, res) => {
 // =======================================================
 app.post("/whish/create", async (req, res) => {
   try {
-    const { invoice_id, amount, currency = "USD" } = req.body;
+    const { orderId, amount, currency, description } = req.body;
 
-    if (!invoice_id || !amount) {
-      return res.status(400).json({ error: "invoice_id and amount are required" });
+    if (!orderId || !amount) {
+      return res.status(400).json({ error: "Missing orderId or amount" });
     }
 
-    const numericAmount = Number(amount);
-    console.log(`💰 Creating Whish payment for Invoice #${invoice_id} (${numericAmount} ${currency})`);
+    const numericAmount = parseFloat(amount);
+    const cur = (currency || "LBP").toUpperCase();
 
     const payload = {
-  amount: numericAmount,
-  currency,
-  invoice: `Invoice #${invoice_id}`,
-  externalId: Number(invoice_id),
-  channel: CHANNEL,
-  secret: SECRET,
-  websiteurl: "mrphonelb.com",
-  successCallbackUrl: `${PUBLIC_BASE_URL}/whish/callback?result=success&invoice_id=${invoice_id}`,
-  failureCallbackUrl: `${PUBLIC_BASE_URL}/whish/callback?result=failure&invoice_id=${invoice_id}`,
-  successRedirectUrl: `${SUCCESS_REDIRECT_URL}?invoice_id=${invoice_id}&pm=whish`,
-  failureRedirectUrl: `${FAIL_REDIRECT_URL}?invoice_id=${invoice_id}&pm=whish`
-};
+      amount: numericAmount,
+      currency: cur,
+      invoice: description || `Invoice #${orderId}`,
+      externalId: Number(orderId),
+      successCallbackUrl: `https://whish-pay-proxy-ahs0.onrender.com/whish/callback?result=success&invoice_id=${orderId}`,
+      failureCallbackUrl: `https://whish-pay-proxy-ahs0.onrender.com/whish/callback?result=failure&invoice_id=${orderId}`,
+      successRedirectUrl: `https://www.mrphonelb.com/client/contents/thankyou?invoice_id=${orderId}&pm=whish`,
+      failureRedirectUrl: `https://www.mrphonelb.com/client/contents/error?invoice_id=${orderId}&pm=whish`
+    };
 
+    console.log(`💰 Creating Whish payment for Invoice #${orderId} (${numericAmount} ${cur})`);
+    console.log("🔹 Sending payload to Whish:", payload);
 
-    console.log("🔹 Sending payload to Whish:", JSON.stringify(payload, null, 2));
-
-    const r = await fetch(`${WHISH_BASE}/payment/whish`, {
+    const r = await fetch("https://api.sandbox.whish.money/itel-service/api/payment/whish", {
       method: "POST",
-      headers: whishHeaders(),
-      body: JSON.stringify(payload),
+      headers: {
+        channel: "10196880",
+        secret: "2faa0831c2a84f8d88d9066288b49991",
+        websiteurl: "mrphonelb.com",
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify(payload)
     });
 
     const text = await r.text();
-    console.log("🔹 Whish raw response (full):", text);
+    console.log("🔹 Whish raw response (full):", text.slice(0, 400));
 
     let data;
     try {
       data = JSON.parse(text);
     } catch {
-      return res.status(500).json({ error: "invalid_json", raw: text });
+      return res.status(500).json({ error: "Invalid JSON", raw: text.slice(0, 400) });
     }
 
-    if (!r.ok || !data?.status || !data?.data?.collectUrl) {
+    if (!data?.data?.collectUrl) {
       console.error("❌ Whish error:", data);
       return res.status(400).json({ error: "Whish error", raw: data });
     }
 
-    let redirect = data.data.collectUrl;
-    if (redirect.includes("api.sandbox.whish.money")) {
-      redirect = redirect.replace("api.sandbox.whish.money", "lb.sandbox.whish.money");
+    let redirectUrl = data.data.collectUrl;
+    if (redirectUrl.includes("api.sandbox.whish.money")) {
+      redirectUrl = redirectUrl.replace("api.sandbox.whish.money", "lb.sandbox.whish.money");
     }
 
-    return res.json({ redirect });
+    res.json({ redirect: redirectUrl });
   } catch (err) {
-    console.error("❌ /whish/create exception:", err);
+    console.error("❌ Whish create exception:", err);
     res.status(500).json({ error: "server_error", details: err.message });
   }
 });
+
 
 // =======================================================
 // 🔁 CALLBACK (after Whish payment)
