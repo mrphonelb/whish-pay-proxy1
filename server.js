@@ -65,8 +65,8 @@ app.post("/whish/create", async (req, res) => {
       externalId: uniqueExternalId,
       successCallbackUrl: `${PUBLIC_BASE_URL}/whish/callback?result=success&invoice_id=${orderId}&amount=${numericAmount}&client_id=${client_id}`,
       failureCallbackUrl: `${PUBLIC_BASE_URL}/whish/callback?result=failure&invoice_id=${orderId}`,
-      successRedirectUrl: `${SUCCESS_REDIRECT_URL}?invoice_id=${orderId}&pm=whish`,
-      failureRedirectUrl: `${FAIL_REDIRECT_URL}?invoice_id=${orderId}&pm=whish`,
+      successRedirectUrl: encodeURI(`${SUCCESS_REDIRECT_URL}?invoice_id=${orderId}&pm=whish`),
+failureRedirectUrl: encodeURI(`${FAIL_REDIRECT_URL}?invoice_id=${orderId}&pm=whish`),
     };
 
     console.log("🔹 Sending payload to Whish:", JSON.stringify(payload, null, 2));
