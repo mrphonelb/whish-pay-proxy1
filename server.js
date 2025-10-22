@@ -112,6 +112,7 @@ failureRedirectUrl: encodeURI(`${FAIL_REDIRECT_URL}?invoice_id=${orderId}&pm=whi
 
 /* =========================================================
    🧾 WHISH CALLBACK → Keep Draft + Add Pending Payment
+   (Aligned with Whish Docs)
 ========================================================= */
 app.get("/whish/callback", async (req, res) => {
   try {
@@ -122,7 +123,7 @@ app.get("/whish/callback", async (req, res) => {
     console.log(`🔹 Whish callback for invoice ${invoice_id} (${result})`);
 
     // =========================================================
-    // 1️⃣ Double-check Whish payment status
+    // 1️⃣ Verify collect status with Whish
     // =========================================================
     const verify = await fetch(`${WHISH_BASE}/payment/collect/status`, {
       method: "POST",
@@ -139,88 +140,99 @@ app.get("/whish/callback", async (req, res) => {
     });
 
     const data = await verify.json();
-    const status = (data?.data?.collectStatus || "").toUpperCase();
-    const txnId = data?.data?.collectTransactionId || `WHISH-${invoice_id}`;
-    const message = data?.dialog?.message || status || "Unknown status";
-
+    const status = (data?.data?.collectStatus || "").toLowerCase();
+    const phone = data?.data?.payerPhoneNumber || "";
+    const txnId = `WHISH-${invoice_id}-${Date.now()}`;
     const headers = {
       Accept: "application/json",
       "Content-Type": "application/json",
       apikey: DAFTRA_API_KEY,
     };
 
-    // =========================================================
-    // 2️⃣ Handle SUCCESSFUL payment
-    // =========================================================
-    if (status === "SUCCESS") {
-      console.log(`✅ Whish payment success for invoice ${invoice_id}`);
+    console.log(`📬 Whish collectStatus = ${status} | phone = ${phone}`);
 
-      // ✅ Calculate actual payment amount (remove +1%)
-      const paidAmount = (Number(amount) / 1.01).toFixed(2);
+    // =========================================================
+    // 2️⃣ Common variables
+    // =========================================================
+    const paidAmount = (Number(amount) / 1.01).toFixed(2);
+    const paymentPayload = {
+      InvoicePayment: {
+        invoice_id: Number(invoice_id),
+        payment_method: "Whish Pay",
+        amount: Number(paidAmount),
+        transaction_id: txnId,
+        treasury_id: 0,
+        status: 2, // pending
+        processed: 0,
+        response_message: `Whish Pay (${status}) - ${phone}`,
+        notes: `Whish Pay ${status} for draft #${invoice_id}`,
+        currency_code: cur,
+      },
+    };
 
-      // ✅ Step 1: Add Pending Payment
+    // =========================================================
+    // 3️⃣ SUCCESS — Add pending payment + keep draft
+    // =========================================================
+    if (status === "success") {
+      console.log(`✅ Whish payment SUCCESS for invoice ${invoice_id}`);
+
       await axios.post(
         "https://www.mrphonelb.com/api2/invoice_payments",
-        {
-          InvoicePayment: {
-            invoice_id: Number(invoice_id),
-            payment_method: "Whish Pay",
-            amount: Number(paidAmount),
-            transaction_id: txnId,
-            treasury_id: 0,
-            status: 2, // pending
-            processed: 0,
-            response_message: "Pending approval (Whish Pay)",
-            notes: `Whish Pay pending confirmation (Txn: ${txnId})`,
-            currency_code: cur,
-          },
-        },
+        paymentPayload,
         { headers }
       );
 
-      console.log(`💰 Added pending payment for draft #${invoice_id}`);
+      console.log(`💰 Pending payment created for draft #${invoice_id}`);
 
-      // ✅ Step 2: Force invoice to remain draft
       await axios.put(
         `https://www.mrphonelb.com/api2/invoices/${invoice_id}`,
         { Invoice: { draft: true } },
         { headers }
       );
 
-      console.log(`🧾 Draft #${invoice_id} kept as draft`);
-
-      // ✅ Redirect to Thank You page
+      console.log(`🧾 Invoice #${invoice_id} kept as draft`);
       return res.redirect(
         `${SUCCESS_REDIRECT_URL}?invoice_id=${invoice_id}&pm=whish`
       );
     }
 
     // =========================================================
-    // 3️⃣ Handle FAILED payment
+    // 4️⃣ FAILED — Redirect to error page
     // =========================================================
-    if (status === "FAILED") {
-      console.warn(`❌ Whish payment failed for invoice ${invoice_id}`);
+    if (status === "failed") {
+      console.warn(`❌ Whish payment FAILED for invoice ${invoice_id}`);
       return res.redirect(
-        `${FAIL_REDIRECT_URL}?invoice_id=${invoice_id}&pm=whish&error=${encodeURIComponent(
-          message
-        )}`
+        `${FAIL_REDIRECT_URL}?invoice_id=${invoice_id}&pm=whish`
       );
     }
 
     // =========================================================
-    // 4️⃣ Handle PENDING or UNKNOWN
+    // 5️⃣ PENDING / UNKNOWN — Still create pending payment
     // =========================================================
-    console.log(`🕒 Whish payment pending for invoice ${invoice_id}`);
+    console.log(`🕒 Whish payment PENDING for invoice ${invoice_id}`);
+
+    await axios.post(
+      "https://www.mrphonelb.com/api2/invoice_payments",
+      paymentPayload,
+      { headers }
+    );
+
+    await axios.put(
+      `https://www.mrphonelb.com/api2/invoices/${invoice_id}`,
+      { Invoice: { draft: true } },
+      { headers }
+    );
+
+    console.log(`💾 Draft #${invoice_id} marked as pending`);
     return res.redirect(
       `${PENDING_REDIRECT_URL}?invoice_id=${invoice_id}&pm=whish&pending=1`
     );
   } catch (err) {
     console.error("❌ Whish callback error:", err.response?.data || err.message);
-    return res.redirect(
-      `${FAIL_REDIRECT_URL}?pm=whish&error=callback_exception`
-    );
+    res.redirect(`${FAIL_REDIRECT_URL}?pm=whish&error=callback_exception`);
   }
 });
+
 
 
 // ============================================================
