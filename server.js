@@ -11,11 +11,18 @@ app.use(express.json());
 app.use(morgan("tiny"));
 app.use(
   cors({
-    origin: ["https://www.mrphonelb.com", "https://mrphonelb.com"],
-    methods: ["GET", "POST"],
-    allowedHeaders: ["Content-Type"],
+    origin: [
+      "https://www.mrphonelb.com",
+      "https://mrphonelb.com"
+    ],
+    methods: ["GET", "POST", "OPTIONS"],
+    allowedHeaders: ["Content-Type", "Authorization"],
   })
 );
+
+// Handle preflight OPTIONS requests
+app.options("*", cors());
+
 
 // ====== Whish sandbox base ======
 const WHISH_BASE = "https://lb.sandbox.whish.money/itel-service/api";
