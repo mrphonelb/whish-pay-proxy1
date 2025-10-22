@@ -22,7 +22,7 @@ app.use(
 // ✅ CONFIGURATION
 // ============================================================
 const WHISH_BASE =
-  process.env.WHISH_BASE || "https://api.sandbox.whish.money/itel-service/api";
+  process.env.WHISH_BASE || "https://whish.money/itel-service/api/";
 const PUBLIC_BASE_URL =
   process.env.PUBLIC_BASE_URL || "https://whish-pay-proxy-ahs0.onrender.com";
 
@@ -52,7 +52,7 @@ const clientId = Number(client_id) || 20007; // fallback
     if (!Number.isFinite(numericAmount))
       return res.status(400).json({ error: "Invalid amount" });
 
-    const cur = (currency || "LBP").toUpperCase();
+    const cur = (currency || "USD").toUpperCase();
 
     // ✅ Make externalId numeric unique (prevents 404 on re-click)
     const uniqueExternalId = Number(`${orderId}${Date.now().toString().slice(-4)}`);
@@ -75,8 +75,8 @@ failureRedirectUrl: encodeURI(`${FAIL_REDIRECT_URL}?invoice_id=${orderId}&pm=whi
     const response = await fetch(`${WHISH_BASE}/payment/whish`, {
       method: "POST",
       headers: {
-        channel: "10196880",
-        secret: "2faa0831c2a84f8d88d9066288b49991",
+        channel: "14762240",
+        secret: "f0164d8b469e42159f9182a81ac730af",
         websiteurl: "mrphonelb.com",
         "Content-Type": "application/json",
       },
@@ -98,10 +98,10 @@ failureRedirectUrl: encodeURI(`${FAIL_REDIRECT_URL}?invoice_id=${orderId}&pm=whi
       return res.status(400).json({ error: "Whish error", raw: data });
     }
 
-    let redirectUrl = data.data.collectUrl.replace(
+    /*let redirectUrl = data.data.collectUrl.replace(
       "api.sandbox.whish.money",
       "lb.sandbox.whish.money"
-    );
+    );*/
 
     res.json({ redirect: redirectUrl });
   } catch (err) {
@@ -118,7 +118,7 @@ app.get("/whish/callback", async (req, res) => {
   try {
     const { invoice_id, result, amount, client_id } = req.query;
     const clientId = Number(client_id) || 20007;
-    const cur = "LBP";
+    const cur = "USD";
 
     console.log(`🔹 Whish callback for invoice ${invoice_id} (${result})`);
 
@@ -128,8 +128,8 @@ app.get("/whish/callback", async (req, res) => {
     const verify = await fetch(`${WHISH_BASE}/payment/collect/status`, {
       method: "POST",
       headers: {
-        channel: "10196880",
-        secret: "2faa0831c2a84f8d88d9066288b49991",
+        channel: "14762240",
+        secret: "f0164d8b469e42159f9182a81ac730af",
         websiteurl: "mrphonelb.com",
         "Content-Type": "application/json",
       },
